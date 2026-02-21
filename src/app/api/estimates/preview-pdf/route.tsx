@@ -10,72 +10,157 @@ import {
   renderToStream,
 } from '@react-pdf/renderer';
 
+function toReiwaDate(isoDate: string): string {
+  const [y, m, d] = isoDate.replace(/-/g, '/').split('/');
+  const reiwa = parseInt(y || '0', 10) - 2018;
+  return `令和${reiwa}年${parseInt(m || '1', 10)}月${parseInt(d || '1', 10)}日`;
+}
+
+const DEFAULT_COMPANY = {
+  name: '株式会社　AFECT',
+  representative: '代表取締役　小松　裕介',
+  tel: '092-519-7189',
+  fax: '092-519-6307',
+};
+
 const styles = StyleSheet.create({
-  page: { padding: 40, fontFamily: 'Helvetica', fontSize: 11 },
-  title: { fontSize: 18, marginBottom: 8, fontWeight: 'bold' },
-  subtitle: { fontSize: 11, marginBottom: 4 },
-  company: { fontSize: 10, marginBottom: 16, color: '#333' },
-  date: { fontSize: 10, marginBottom: 16 },
-  totalLabel: { fontSize: 11, fontWeight: 'bold', marginTop: 16, marginBottom: 4 },
-  totalAmount: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  page: { padding: 36, fontFamily: 'Helvetica', fontSize: 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  title: { fontSize: 20, fontWeight: 'bold', flex: 1, textAlign: 'center' },
+  headerRight: { fontSize: 9, textAlign: 'right', width: 120 },
+  bodyRow: { flexDirection: 'row', marginBottom: 12 },
+  clientBlock: { flex: 1 },
+  subjectBlock: { flex: 1 },
+  clientName: { fontSize: 11, marginBottom: 4 },
+  subjectText: { fontSize: 10 },
+  termsTable: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+  termsRow: { flexDirection: 'row', width: '100%', borderBottomWidth: 1, borderBottomColor: '#999', paddingVertical: 4 },
+  termsLabel: { width: '25%', fontSize: 9 },
+  termsValue: { width: '75%', fontSize: 9 },
+  totalRow: { flexDirection: 'row', marginBottom: 16 },
+  totalLabel: { fontSize: 12, fontWeight: 'bold', marginRight: 8 },
+  totalAmount: { fontSize: 18, fontWeight: 'bold' },
+  vendorBlock: { fontSize: 9, textAlign: 'right' },
   table: { marginTop: 8 },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#999', paddingVertical: 6, paddingHorizontal: 4 },
   tableHeader: { backgroundColor: '#eee', fontWeight: 'bold' },
-  col1: { width: '8%', textAlign: 'center' },
-  col2: { width: '40%' },
-  col3: { width: '12%', textAlign: 'center' },
-  col4: { width: '12%', textAlign: 'center' },
-  col5: { width: '14%', textAlign: 'right' },
-  col6: { width: '14%', textAlign: 'right' },
+  colKo: { width: '8%', textAlign: 'center' },
+  colName: { width: '42%' },
+  colQty: { width: '18%', textAlign: 'center' },
+  colPrice: { width: '16%', textAlign: 'right' },
+  colAmount: { width: '16%', textAlign: 'right' },
+  summaryWrap: { alignItems: 'flex-end', marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#999' },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', width: 140, marginBottom: 4 },
 });
 
 function EstimatePdfDoc({
   projectName,
-  companyName,
+  clientName,
+  estimateNo,
   createDate,
   items,
+  subtotal,
+  tax,
   totalAmount,
+  companyName,
+  representative,
+  tel,
+  fax,
 }: {
   projectName: string;
-  companyName: string;
+  clientName: string;
+  estimateNo: string;
   createDate: string;
   items: Array<{ name: string; qty: number; unit: string; sellPrice: number; amount: number }>;
+  subtotal: number;
+  tax: number;
   totalAmount: number;
+  companyName: string;
+  representative: string;
+  tel: string;
+  fax: string;
 }) {
+  const reiwaDate = toReiwaDate(createDate);
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>御見積書</Text>
-        <Text style={styles.subtitle}>件名: {projectName || '（件名）'}</Text>
-        <Text style={styles.company}>{companyName}</Text>
-        <Text style={styles.date}>{createDate}</Text>
-        <Text style={styles.totalLabel}>御見積合計金額</Text>
-        <Text style={styles.totalAmount}>¥{totalAmount.toLocaleString()}</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>御見積書</Text>
+          <View style={styles.headerRight}>
+            <Text>見積No. {estimateNo}</Text>
+            <Text>{reiwaDate}</Text>
+            <Text>日付見積御照会の件</Text>
+          </View>
+        </View>
+        <View style={styles.bodyRow}>
+          <View style={styles.clientBlock}>
+            <Text style={styles.clientName}>{clientName || '（宛先）'} 御中</Text>
+          </View>
+          <View style={styles.subjectBlock}>
+            <Text style={styles.subjectText}>{projectName || '（件名）'}</Text>
+            <Text style={styles.subjectText}>に対し、次の通り御見積致しますので何卒御用命下さいますよう御願い申し上げます。</Text>
+          </View>
+        </View>
+        <View style={styles.termsTable}>
+          <View style={[styles.termsRow, styles.tableHeader]}>
+            <Text style={styles.termsLabel}>納　期</Text>
+            <Text style={styles.termsValue}>ご指定日</Text>
+          </View>
+          <View style={styles.termsRow}>
+            <Text style={styles.termsLabel}>受渡場所</Text>
+            <Text style={styles.termsValue}>ご指定場所</Text>
+          </View>
+          <View style={styles.termsRow}>
+            <Text style={styles.termsLabel}>御支払条件</Text>
+            <Text style={styles.termsValue}>別途お打合せ</Text>
+          </View>
+          <View style={styles.termsRow}>
+            <Text style={styles.termsLabel}>見積有効期限</Text>
+            <Text style={styles.termsValue}>別途お打合せ</Text>
+          </View>
+        </View>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>合計金額</Text>
+          <Text style={styles.totalAmount}>¥{subtotal.toLocaleString()}</Text>
+        </View>
+        <View style={[styles.bodyRow, { justifyContent: 'flex-end' }]}>
+          <View style={styles.vendorBlock}>
+            <Text>{companyName}</Text>
+            <Text>{representative}</Text>
+            <Text>TEL: {tel}  FAX: {fax}</Text>
+          </View>
+        </View>
         <View style={styles.table}>
           <View style={[styles.tableRow, styles.tableHeader]}>
-            <Text style={styles.col1}>No</Text>
-            <Text style={styles.col2}>品名</Text>
-            <Text style={styles.col3}>数量</Text>
-            <Text style={styles.col4}>単位</Text>
-            <Text style={styles.col5}>単価</Text>
-            <Text style={styles.col6}>金額</Text>
+            <Text style={styles.colKo}>項</Text>
+            <Text style={styles.colName}>品　名</Text>
+            <Text style={styles.colQty}>数　量</Text>
+            <Text style={styles.colPrice}>単　価</Text>
+            <Text style={styles.colAmount}>合　計</Text>
           </View>
           {items.map((item, idx) => (
             <View key={idx} style={styles.tableRow}>
-              <Text style={styles.col1}>{idx + 1}</Text>
-              <Text style={styles.col2}>{item.name || ''}</Text>
-              <Text style={styles.col3}>{item.qty}</Text>
-              <Text style={styles.col4}>{item.unit}</Text>
-              <Text style={styles.col5}>¥{item.sellPrice.toLocaleString()}</Text>
-              <Text style={styles.col6}>¥{item.amount.toLocaleString()}</Text>
+              <Text style={styles.colKo} />
+              <Text style={styles.colName}>{item.name || ''}</Text>
+              <Text style={styles.colQty}>{item.qty}{item.unit || ''}</Text>
+              <Text style={styles.colPrice}>¥{item.sellPrice.toLocaleString()}</Text>
+              <Text style={styles.colAmount}>¥{item.amount.toLocaleString()}</Text>
             </View>
           ))}
+        </View>
+        <View style={styles.summaryWrap}>
+          <View style={styles.summaryRow}>
+            <Text>合　計</Text>
+            <Text>¥{subtotal.toLocaleString()}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text>消費税</Text>
+            <Text>¥{tax.toLocaleString()}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text>御請求合計</Text>
+            <Text>¥{totalAmount.toLocaleString()}</Text>
+          </View>
         </View>
       </Page>
     </Document>
@@ -115,23 +200,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '明細を1件以上入力してください' }, { status: 400 });
     }
 
-    const totalAmount = items.reduce((s: number, i: { amount: number }) => s + i.amount, 0);
+    const subtotal = items.reduce((s: number, i: { amount: number }) => s + i.amount, 0);
+    const tax = Math.floor(subtotal * 0.1);
+    const totalAmount = subtotal + tax;
+
     const supabase = createServerClient();
     const { data: settingsRows } = await supabase.from('settings').select('key, value');
     const settings: Record<string, string> = {};
     (settingsRows || []).forEach((r: { key?: string; value?: string }) => {
       if (r.key) settings[r.key] = r.value || '';
     });
-    const companyName = settings.companyName || '（会社名を設定）';
+    const companyName = settings.companyName || DEFAULT_COMPANY.name;
+    const representative = settings.companyRepresentative || DEFAULT_COMPANY.representative;
+    const tel = settings.companyTel || DEFAULT_COMPANY.tel;
+    const fax = settings.companyFax || DEFAULT_COMPANY.fax;
+
     const createDate = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+    const estimateNo = 'PRV-' + Date.now().toString().slice(-6);
 
     const doc = (
       <EstimatePdfDoc
         projectName={(projectName || clientName || '見積').toString()}
-        companyName={companyName}
+        clientName={(clientName || '').toString()}
+        estimateNo={estimateNo}
         createDate={createDate}
         items={items}
+        subtotal={subtotal}
+        tax={tax}
         totalAmount={totalAmount}
+        companyName={companyName}
+        representative={representative}
+        tel={tel}
+        fax={fax}
       />
     );
     const pdfStream = await renderToStream(doc);

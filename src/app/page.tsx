@@ -483,21 +483,42 @@ export default function Home() {
     }
     if (totalEl) totalEl.textContent = '¥' + total.toLocaleString();
 
-    const companyName = settings.companyName || '（会社名）';
+    const companyName = settings.companyName || '株式会社　AFECT';
+    const representative = settings.companyRepresentative || '代表取締役　小松　裕介';
+    const companyTel = settings.companyTel || '092-519-7189';
+    const companyFax = settings.companyFax || '092-519-6307';
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+    const [y, m, d] = dateStr.split('/');
+    const reiwa = parseInt(y || '0', 10) - 2018;
+    const reiwaDate = `令和${reiwa}年${parseInt(m || '1', 10)}月${parseInt(d || '1', 10)}日`;
+    const subtotal = total;
+    const tax = Math.floor(subtotal * 0.1);
+    const totalWithTax = subtotal + tax;
+
     if (docEl) {
-      docEl.innerHTML = '<div style="font-family:sans-serif; font-size:14px;">' +
-        '<h2 style="margin:0 0 8px 0">御見積書</h2>' +
-        '<p style="margin:0 0 4px 0">件名: ' + (clientName || '（クライアント名を入力）') + '</p>' +
-        '<p style="margin:0 0 16px 0; font-size:12px">' + companyName + '</p>' +
-        '<p style="margin:0 0 8px 0; font-size:12px">' + dateStr + '</p>' +
-        '<p style="margin:16px 0 4px 0; font-weight:bold">御見積合計金額</p>' +
-        '<p style="margin:0 0 16px 0; font-size:18px; font-weight:bold">¥' + total.toLocaleString() + '</p>' +
-        '<table style="width:100%; border-collapse:collapse; font-size:12px">' +
-        '<tr style="background:#eee"><th style="border:1px solid #ccc; padding:6px">No</th><th style="border:1px solid #ccc; padding:6px">品名</th><th style="border:1px solid #ccc; padding:6px">数量</th><th style="border:1px solid #ccc; padding:6px">単位</th><th style="border:1px solid #ccc; padding:6px; text-align:right">単価</th><th style="border:1px solid #ccc; padding:6px; text-align:right">金額</th></tr>' +
-        calcItems.map((i, idx) =>
-          `<tr><td style="border:1px solid #ccc; padding:6px">${idx + 1}</td><td style="border:1px solid #ccc; padding:6px">${i.name}</td><td style="border:1px solid #ccc; padding:6px">${i.qty}</td><td style="border:1px solid #ccc; padding:6px">${i.unit}</td><td style="border:1px solid #ccc; padding:6px; text-align:right">¥${i.sellPrice.toLocaleString()}</td><td style="border:1px solid #ccc; padding:6px; text-align:right">¥${i.amount.toLocaleString()}</td></tr>`
-        ).join('') + '</table></div>';
+      docEl.innerHTML = '<div style="font-family:sans-serif; font-size:12px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">' +
+        '<h2 style="margin:0; flex:1; text-align:center; font-size:18px;">御見積書</h2>' +
+        '<div style="font-size:10px; text-align:right; width:100px;">見積No. PRV<br>' + reiwaDate + '<br>日付見積御照会の件</div></div>' +
+        '<div style="display:flex; margin-bottom:12px;">' +
+        '<div style="flex:1;"><strong>' + (clientName || '（宛先）') + ' 御中</strong></div>' +
+        '<div style="flex:1;">' + (clientName || '（件名）') + ' に対し、次の通り御見積致しますので何卒御用命下さいますよう御願い申し上げます。</div></div>' +
+        '<table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:12px;">' +
+        '<tr style="border-bottom:1px solid #999;"><td style="width:20%; padding:4px;">納　期</td><td style="padding:4px;">ご指定日</td></tr>' +
+        '<tr style="border-bottom:1px solid #999;"><td style="padding:4px;">受渡場所</td><td style="padding:4px;">ご指定場所</td></tr>' +
+        '<tr style="border-bottom:1px solid #999;"><td style="padding:4px;">御支払条件</td><td style="padding:4px;">別途お打合せ</td></tr>' +
+        '<tr style="border-bottom:1px solid #999;"><td style="padding:4px;">見積有効期限</td><td style="padding:4px;">別途お打合せ</td></tr></table>' +
+        '<p style="margin:0 0 12px 0;"><strong>合計金額</strong> <span style="font-size:16px; font-weight:bold;">¥' + subtotal.toLocaleString() + '</span></p>' +
+        '<div style="text-align:right; font-size:10px; margin-bottom:12px;">' + companyName + '<br>' + representative + '<br>TEL: ' + companyTel + '  FAX: ' + companyFax + '</div>' +
+        '<table style="width:100%; border-collapse:collapse; font-size:11px">' +
+        '<tr style="background:#eee"><th style="border:1px solid #999; padding:6px; width:8%">項</th><th style="border:1px solid #999; padding:6px;">品　名</th><th style="border:1px solid #999; padding:6px; width:15%">数　量</th><th style="border:1px solid #999; padding:6px; width:15%; text-align:right">単　価</th><th style="border:1px solid #999; padding:6px; width:15%; text-align:right">合　計</th></tr>' +
+        calcItems.map((i) =>
+          '<tr><td style="border:1px solid #999; padding:6px"></td><td style="border:1px solid #999; padding:6px">' + i.name + '</td><td style="border:1px solid #999; padding:6px">' + i.qty + (i.unit || '') + '</td><td style="border:1px solid #999; padding:6px; text-align:right">¥' + i.sellPrice.toLocaleString() + '</td><td style="border:1px solid #999; padding:6px; text-align:right">¥' + i.amount.toLocaleString() + '</td></tr>'
+        ).join('') + '</table>' +
+        '<div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px solid #999;">' +
+        '<div style="display:flex; justify-content:flex-end; gap:24px;"><span>合　計</span><span style="width:80px; text-align:right">¥' + subtotal.toLocaleString() + '</span></div>' +
+        '<div style="display:flex; justify-content:flex-end; gap:24px;"><span>消費税</span><span style="width:80px; text-align:right">¥' + tax.toLocaleString() + '</span></div>' +
+        '<div style="display:flex; justify-content:flex-end; gap:24px;"><span>御請求合計</span><span style="width:80px; text-align:right">¥' + totalWithTax.toLocaleString() + '</span></div></div></div>';
     }
   };
 
@@ -1044,12 +1065,33 @@ function EstimateEditCard({
   );
 }
 
-function RecentEstimates({ onOpen }: { onOpen: (id: number) => void }) {
+function RecentEstimates({ onOpen, onDeleted }: { onOpen: (id: number) => void; onDeleted?: () => void }) {
   const [list, setList] = useState<Array<{ estimateId: number; clientName: string; projectName: string; createDate: string; status: string; pdfFileId?: string }>>([]);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     apiGet<typeof list>('/estimates').then(setList).catch(() => setList([]));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleDelete = async (estimateId: number, status: string) => {
+    if (status !== '下書き') return;
+    if (!confirm('この下書きを削除しますか？')) return;
+    try {
+      const res = await fetch(`/api/estimates/${estimateId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        load();
+        onDeleted?.();
+      } else {
+        alert(data.error || '削除に失敗しました');
+      }
+    } catch (e) {
+      alert('削除に失敗しました: ' + String((e as Error).message));
+    }
+  };
 
   if (list.length === 0) {
     return (
@@ -1069,6 +1111,7 @@ function RecentEstimates({ onOpen }: { onOpen: (id: number) => void }) {
         {list.map((e) => {
           const title = e.clientName || e.projectName || '見積 No.' + e.estimateId;
           const sub = (e.createDate ? String(e.createDate).replace(/T.*/, '') : '') + (e.status ? ' · ' + e.status : '');
+          const isDraft = e.status === '下書き';
           return (
             <div key={e.estimateId} className="list-item">
               <div>
@@ -1076,14 +1119,26 @@ function RecentEstimates({ onOpen }: { onOpen: (id: number) => void }) {
                 <br />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{sub}</span>
               </div>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpen(e.estimateId)} style={{ width: 'auto' }}>
-                開く
-              </button>
-              {e.pdfFileId && (
-                <a href={e.pdfFileId.startsWith('http') ? e.pdfFileId : '#'} target="_blank" rel="noopener" style={{ fontSize: '0.875rem' }}>
-                  PDF
-                </a>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpen(e.estimateId)} style={{ width: 'auto' }}>
+                  開く
+                </button>
+                {e.pdfFileId && (
+                  <a href={e.pdfFileId.startsWith('http') ? e.pdfFileId : '#'} target="_blank" rel="noopener" style={{ fontSize: '0.875rem' }}>
+                    PDF
+                  </a>
+                )}
+                {isDraft && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ width: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)' }}
+                    onClick={() => handleDelete(e.estimateId, e.status)}
+                  >
+                    削除
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

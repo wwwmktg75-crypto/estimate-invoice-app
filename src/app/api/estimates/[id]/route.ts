@@ -1,5 +1,63 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+
+/** 下書き見積の削除 */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const estimateId = parseInt(id, 10);
+    if (isNaN(estimateId)) {
+      return NextResponse.json(
+        { success: false, error: '無効な見積ID' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServerClient();
+
+    const { data: header, error: headerErr } = await supabase
+      .from('client_estimates')
+      .select('id, status')
+      .eq('id', estimateId)
+      .single();
+
+    if (headerErr || !header) {
+      return NextResponse.json(
+        { success: false, error: '見積が見つかりません' },
+        { status: 404 }
+      );
+    }
+
+    if (header.status !== '下書き') {
+      return NextResponse.json(
+        { success: false, error: '下書きのみ削除できます' },
+        { status: 400 }
+      );
+    }
+
+    await supabase
+      .from('client_estimate_items')
+      .delete()
+      .eq('estimate_id', estimateId);
+
+    const { error: deleteErr } = await supabase
+      .from('client_estimates')
+      .delete()
+      .eq('id', estimateId);
+
+    if (deleteErr) throw deleteErr;
+
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    return NextResponse.json(
+      { success: false, error: (e as Error).message },
+      { status: 500 }
+    );
+  }
+}
 
 /** 見積詳細取得 */
 export async function GET(
