@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 const API = '/api';
 
-async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(API + path);
+async function apiGet<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(API + path, { cache: 'no-store', ...options });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -318,13 +318,13 @@ export default function Home() {
         const qid = (e.currentTarget as HTMLElement).getAttribute('data-quote-id');
         if (!qid || !confirm('この取り込みファイルを削除しますか？')) return;
         try {
-          const res = await fetch(`/api/contractor-quotes/${qid}`, { method: 'DELETE' });
+          const res = await fetch(`/api/contractor-quotes/${encodeURIComponent(qid)}`, { method: 'DELETE' });
           const data = await res.json().catch(() => ({}));
-          if (data.success) {
+          if (res.ok && data.success) {
             toast('削除しました');
             reload();
           } else {
-            toast(data.error || '削除に失敗しました');
+            toast(data.error || `削除に失敗しました (${res.status})`);
           }
         } catch (e) {
           toast('削除に失敗しました: ' + String((e as Error).message));

@@ -8,14 +8,35 @@ export async function DELETE(
 ) {
   try {
     const { id: quoteId } = await params;
+    if (!quoteId || typeof quoteId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: '無効なIDです' },
+        { status: 400 }
+      );
+    }
+
     const supabase = createServerClient();
 
-    const { error } = await supabase
+    // 明細を先に削除（CASCADEに依存せず確実に削除）
+    await supabase
+      .from('contractor_quote_items')
+      .delete()
+      .eq('quote_id', quoteId);
+
+    const { data: deleted, error } = await supabase
       .from('contractor_quotes')
       .delete()
-      .eq('id', quoteId);
+      .eq('id', quoteId)
+      .select('id');
 
     if (error) throw error;
+
+    if (!deleted || deleted.length === 0) {
+      return NextResponse.json(
+        { success: false, error: '該当する見積が見つかりません' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (e) {
