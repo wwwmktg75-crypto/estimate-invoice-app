@@ -199,3 +199,150 @@ textarea {
   max-height: 300px;
   overflow: auto;
 }
+
+/* 業者見積詳細ビュー（画像UI風） */
+.quote-detail-view {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quote-detail-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.quote-detail-nav .nav-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.9375rem;
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.quote-detail-nav .nav-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.quote-detail-header {
+  background: var(--primary);
+  color: #fff;
+  padding: 16px;
+}
+
+.quote-detail-header .quote-title {
+  font-size: 0.875rem;
+  opacity: 0.95;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.quote-detail-header .quote-total-label {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.quote-detail-header .quote-total-amount {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.quote-detail-items {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--surface);
+  padding: 0 16px;
+}
+
+.quote-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.quote-detail-item:last-child {
+  border-bottom: none;
+}
+
+.quote-detail-item-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.quote-detail-item-name {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.quote-detail-item-meta {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.quote-detail-item-amount {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.quote-detail-profit {
+  padding: 20px 16px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.quote-detail-profit-label {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.quote-detail-profit-btns {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.quote-detail-profit-btn {
+  min-width: 100px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid var(--primary);
+  transition: all 0.2s;
+}
+
+.quote-detail-profit-btn.selected {
+  background: var(--primary);
+  color: #fff;
+}
+
+.quote-detail-profit-btn:not(.selected) {
+  background: #fff;
+  color: var(--primary);
+}

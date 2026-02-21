@@ -53,6 +53,114 @@ interface QuoteDetail {
   items: QuoteItem[];
 }
 
+function ContractorQuoteDetailView({
+  quoteId,
+  clientList,
+  onBack,
+  onCreateEstimate,
+  showToast,
+}: {
+  quoteId: string;
+  clientList: string[];
+  onBack: () => void;
+  onCreateEstimate: (quoteId: string, profitRate?: number) => void;
+  showToast: (msg: string) => void;
+}) {
+  const [detail, setDetail] = useState<QuoteDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [costMode, setCostMode] = useState(false);
+  const [profitRate, setProfitRate] = useState(10);
+
+  useEffect(() => {
+    apiGet<QuoteDetail>(`/contractor-quotes/${quoteId}`)
+      .then(setDetail)
+      .catch(() => setDetail(null))
+      .finally(() => setLoading(false));
+  }, [quoteId]);
+
+  if (loading) {
+    return (
+      <div className="quote-detail-view">
+        <div className="quote-detail-nav">
+          <button type="button" className="nav-back" onClick={onBack}>← 戻る</button>
+        </div>
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>読み込み中…</div>
+      </div>
+    );
+  }
+
+  const header = detail?.header;
+  const items = detail?.items ?? [];
+  const totalCost = header?.totalCost ?? items.reduce((s, i) => s + (Number(i.amount) || Number(i.costPrice) * (Number(i.qty) || 1)), 0);
+  const displayTotal = costMode ? totalCost : Math.floor(totalCost * (1 + profitRate / 100));
+
+  return (
+    <div className="quote-detail-view">
+      <div className="quote-detail-nav">
+        <button type="button" className="nav-back" onClick={onBack}>← 戻る</button>
+        <div className="nav-actions">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onCreateEstimate(quoteId, profitRate)}>編集</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCostMode((c) => !c)}>
+            {costMode ? '売上モード' : '原価モード'}
+          </button>
+        </div>
+      </div>
+      <div className="quote-detail-header">
+        <div className="quote-title">
+          {(header?.subject || header?.fileName || quoteId || '業者見積') + (header?.contractorName ? ' ' + header.contractorName : '')}_処理済み
+        </div>
+        <div className="quote-total-label">合計金額</div>
+        <div className="quote-total-amount">¥{displayTotal.toLocaleString()}</div>
+      </div>
+      <div className="quote-detail-items">
+        {items.length === 0 ? (
+          <p style={{ padding: 24, color: 'var(--text-muted)', fontSize: '0.875rem' }}>明細がありません（Excelの形式を確認してください）</p>
+        ) : (
+          items.map((i, idx) => {
+            const cost = Number(i.costPrice) || 0;
+            const qty = Number(i.qty) || 1;
+            const amt = Number(i.amount) || cost * qty;
+            const unit = i.unit || '式';
+            const displayAmt = costMode ? amt : Math.floor(amt * (1 + profitRate / 100));
+            return (
+              <div key={idx} className="quote-detail-item">
+                <div className="quote-detail-item-left">
+                  <div className="quote-detail-item-name">{i.name || ''}</div>
+                  <div className="quote-detail-item-meta">x{qty}{unit} @{cost.toLocaleString()}</div>
+                </div>
+                <div className="quote-detail-item-amount">¥{displayAmt.toLocaleString()}</div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="quote-detail-profit">
+        <div className="quote-detail-profit-label">利益率を選択してプレビュー</div>
+        <div className="quote-detail-profit-btns">
+          <button
+            type="button"
+            className={`quote-detail-profit-btn ${profitRate === 10 ? 'selected' : ''}`}
+            onClick={() => setProfitRate(10)}
+          >+10%</button>
+          <button
+            type="button"
+            className={`quote-detail-profit-btn ${profitRate === 20 ? 'selected' : ''}`}
+            onClick={() => setProfitRate(20)}
+          >+20%</button>
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => onCreateEstimate(quoteId, profitRate)}
+            disabled={items.length === 0}
+          >この内容で見積書を作成</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'estimate' | 'invoice'>('estimate');
   const [toast, setToast] = useState('');
@@ -63,6 +171,7 @@ export default function Home() {
   const [previewQuoteItems, setPreviewQuoteItems] = useState<QuoteItem[]>([]);
   const [previewQuoteHeader, setPreviewQuoteHeader] = useState<QuoteDetail['header'] | null>(null);
   const [previewSettings, setPreviewSettings] = useState<Record<string, string>>({});
+  const [selectedQuoteIdForDetail, setSelectedQuoteIdForDetail] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -112,50 +221,15 @@ export default function Home() {
   }, []);
 
   const bindQuoteButtons = (container: HTMLElement) => {
-    const detailEl = document.getElementById('importedQuoteDetail');
-    container.querySelectorAll('.btn-show-detail').forEach((btn) => {
-      btn.addEventListener('click', async function (this: HTMLElement) {
-        const qid = this.getAttribute('data-quote-id');
-        if (!qid || !detailEl) return;
-        detailEl.classList.remove('hidden');
-        detailEl.innerHTML = '<span style="color: var(--text-muted)">読み込み中…</span>';
-        try {
-          const res = await apiGet<QuoteDetail>(`/contractor-quotes/${qid}`);
-          const items = res?.items ?? [];
-          const header = res?.header;
-          let headerHtml = '';
-          if (header) {
-            const parts = [];
-            if (header.subject) parts.push('件名: ' + header.subject);
-            if (header.fileName) parts.push('ファイル: ' + header.fileName);
-            if (header.totalCost != null && header.totalCost > 0) parts.push('合計原価: ¥' + Number(header.totalCost).toLocaleString());
-            if (parts.length) headerHtml = '<p style="font-size:0.875rem; margin-bottom:8px">' + parts.join('　｜　') + '</p>';
-          }
-          if (items.length === 0) {
-            detailEl.innerHTML = headerHtml + '<p style="font-size:0.875rem; color: var(--text-muted)">明細がありません（Excelの形式を確認してください）</p>';
-            return;
-          }
-          const tableRows = items.map((i) => {
-            const cost = Number(i.costPrice) || 0;
-            const qty = Number(i.qty) || 1;
-            const amt = Number(i.amount) || cost * qty;
-            return `<tr><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${i.name || ''}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${qty}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${i.unit || '式'}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border); text-align:right">¥${cost.toLocaleString()}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border); text-align:right">¥${amt.toLocaleString()}</td></tr>`;
-          }).join('');
-          detailEl.innerHTML = headerHtml + '<strong>業者見積明細</strong><table style="width:100%; border-collapse:collapse; font-size:0.8rem; margin-top:8px"><tr style="background:var(--border)"><th style="padding:4px 6px; text-align:left">品名</th><th style="padding:4px 6px">数量</th><th style="padding:4px 6px">単位</th><th style="padding:4px 6px; text-align:right">原価単価</th><th style="padding:4px 6px; text-align:right">金額</th></tr>' + tableRows + '</table>';
-        } catch (e) {
-          detailEl.innerHTML = '<p style="color:#c00">取得失敗: ' + String((e as Error).message) + '</p>';
-        }
-      });
-    });
-    container.querySelectorAll('.btn-create-estimate').forEach((btn) => {
+    container.querySelectorAll('.btn-show-detail, .btn-create-estimate').forEach((btn) => {
       btn.addEventListener('click', function (this: HTMLElement) {
-        const quoteId = this.getAttribute('data-quote-id');
-        if (quoteId) openEstimatePreview(quoteId);
+        const qid = this.getAttribute('data-quote-id');
+        if (qid) setSelectedQuoteIdForDetail(qid);
       });
     });
   };
 
-  const openEstimatePreview = async (quoteId: string) => {
+  const openEstimatePreview = async (quoteId: string, initialProfitRate?: number) => {
     const card = document.getElementById('cardEstimateFromQuote');
     if (card) {
       card.classList.remove('hidden');
@@ -170,7 +244,7 @@ export default function Home() {
       estimatePreviewDoc: document.getElementById('estimatePreviewDoc'),
     };
     if (els.previewClientName) els.previewClientName.value = '';
-    if (els.previewProfitRate) els.previewProfitRate.value = '15';
+    if (els.previewProfitRate) els.previewProfitRate.value = String(initialProfitRate ?? 15);
     if (els.previewContractorQuoteHeader) els.previewContractorQuoteHeader.innerHTML = '<span style="color: var(--text-muted)">読み込み中…</span>';
     if (els.previewContractorQuoteItems) els.previewContractorQuoteItems!.innerHTML = '';
     if (els.previewItemsTable) els.previewItemsTable.innerHTML = '<p style="color: var(--text-muted)">読み込み中…</p>';
@@ -297,6 +371,18 @@ export default function Home() {
 
   return (
     <>
+      {selectedQuoteIdForDetail && (
+        <ContractorQuoteDetailView
+          quoteId={selectedQuoteIdForDetail}
+          clientList={clientList}
+          onBack={() => setSelectedQuoteIdForDetail(null)}
+          onCreateEstimate={(quoteId, profitRate) => {
+            setSelectedQuoteIdForDetail(null);
+            openEstimatePreview(quoteId, profitRate);
+          }}
+          showToast={showToast}
+        />
+      )}
       <div className="header">
         <h1>見積・請求</h1>
       </div>
@@ -345,7 +431,6 @@ export default function Home() {
                 一覧を更新
               </button>
               <div id="importedQuoteList" style={{ marginTop: 12 }} />
-              <div id="importedQuoteDetail" className="hidden preview-box" style={{ marginTop: 12, maxHeight: 200, overflow: 'auto' }} />
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                 <button type="button" className="btn btn-primary" id="btnNewEstimateFromScratch">
                   手入力で見積書を作成
