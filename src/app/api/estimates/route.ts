@@ -82,7 +82,9 @@ export async function POST(req: NextRequest) {
       const item = baseItems[idx];
       const cost = Number(item.costPrice ?? item.price) || 0;
       const qty = Number(item.qty) || 1;
-      const sellPrice = Math.floor(cost * (1 + rate / 100));
+      const itemRate = (item.profitRate != null && item.profitRate !== '') ? Number(item.profitRate) : rate;
+      const applyMargin = item.applyMargin !== false;
+      const sellPrice = applyMargin ? Math.floor(cost * (1 + itemRate / 100)) : cost;
       const amount = sellPrice * qty;
 
       await supabase.from('client_estimate_items').insert({
@@ -92,8 +94,8 @@ export async function POST(req: NextRequest) {
         qty,
         unit: item.unit || '式',
         cost_price: cost,
-        profit_rate: rate,
-        apply_margin: true,
+        profit_rate: applyMargin ? itemRate : null,
+        apply_margin: applyMargin,
         sell_price: sellPrice,
         amount,
       });

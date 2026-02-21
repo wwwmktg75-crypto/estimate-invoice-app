@@ -46,11 +46,27 @@ interface QuoteItem {
   amount: number;
 }
 
+/** 利益率・マージン適用を付与した明細（編集用） */
+interface EditableQuoteItem extends QuoteItem {
+  profitRate: number;
+  applyMargin: boolean;
+}
+
 interface QuoteDetail {
   success: boolean;
   quoteId: string;
   header: { contractorName: string; subject: string; fileName: string; importedAt: string; totalCost: number };
   items: QuoteItem[];
+}
+
+const DEFAULT_PROFIT_RATE = 10;
+
+function toEditableItem(i: QuoteItem): EditableQuoteItem {
+  return {
+    ...i,
+    profitRate: DEFAULT_PROFIT_RATE,
+    applyMargin: true,
+  };
 }
 
 function ContractorQuoteDetailView({
@@ -63,20 +79,46 @@ function ContractorQuoteDetailView({
   quoteId: string;
   clientList: string[];
   onBack: () => void;
-  onCreateEstimate: (quoteId: string, profitRate?: number) => void;
+  onCreateEstimate: (items: EditableQuoteItem[], header: QuoteDetail['header'] | null | undefined) => void;
   showToast: (msg: string) => void;
 }) {
   const [detail, setDetail] = useState<QuoteDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [costMode, setCostMode] = useState(false);
-  const [profitRate, setProfitRate] = useState(10);
+  const [editableItems, setEditableItems] = useState<EditableQuoteItem[]>([]);
 
   useEffect(() => {
     apiGet<QuoteDetail>(`/contractor-quotes/${quoteId}`)
-      .then(setDetail)
-      .catch(() => setDetail(null))
+      .then((d) => {
+        setDetail(d);
+        setEditableItems((d?.items ?? []).map(toEditableItem));
+      })
+      .catch(() => {
+        setDetail(null);
+        setEditableItems([]);
+      })
       .finally(() => setLoading(false));
   }, [quoteId]);
+
+  const header = detail?.header;
+  const totalCost = costMode
+    ? editableItems.reduce((s, i) => s + (Number(i.amount) || Number(i.costPrice) * (Number(i.qty) || 1)), 0)
+    : editableItems.reduce((s, i) => {
+        const amt = Number(i.amount) || Number(i.costPrice) * (Number(i.qty) || 1);
+        return s + (i.applyMargin ? Math.floor(amt * (1 + i.profitRate / 100)) : amt);
+      }, 0);
+
+  const updateItem = (idx: number, upd: Partial<EditableQuoteItem>) => {
+    setEditableItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...upd } : it)));
+  };
+
+  const deleteItem = (idx: number) => {
+    setEditableItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addItem = () => {
+    setEditableItems((prev) => [...prev, toEditableItem({ name: '', qty: 1, unit: '式', costPrice: 0, amount: 0 })]);
+  };
 
   if (loading) {
     return (
@@ -89,17 +131,12 @@ function ContractorQuoteDetailView({
     );
   }
 
-  const header = detail?.header;
-  const items = detail?.items ?? [];
-  const totalCost = header?.totalCost ?? items.reduce((s, i) => s + (Number(i.amount) || Number(i.costPrice) * (Number(i.qty) || 1)), 0);
-  const displayTotal = costMode ? totalCost : Math.floor(totalCost * (1 + profitRate / 100));
-
   return (
     <div className="quote-detail-view">
       <div className="quote-detail-nav">
         <button type="button" className="nav-back" onClick={onBack}>← 戻る</button>
         <div className="nav-actions">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onCreateEstimate(quoteId, profitRate)}>編集</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onCreateEstimate(editableItems, header ?? null)}>編集</button>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCostMode((c) => !c)}>
             {costMode ? '売上モード' : '原価モード'}
           </button>
@@ -110,50 +147,97 @@ function ContractorQuoteDetailView({
           {(header?.subject || header?.fileName || quoteId || '業者見積') + (header?.contractorName ? ' ' + header.contractorName : '')}_処理済み
         </div>
         <div className="quote-total-label">合計金額</div>
-        <div className="quote-total-amount">¥{displayTotal.toLocaleString()}</div>
+        <div className="quote-total-amount">¥{totalCost.toLocaleString()}</div>
       </div>
       <div className="quote-detail-items">
-        {items.length === 0 ? (
-          <p style={{ padding: 24, color: 'var(--text-muted)', fontSize: '0.875rem' }}>明細がありません（Excelの形式を確認してください）</p>
+        {editableItems.length === 0 ? (
+          <p style={{ padding: 24, color: 'var(--text-muted)', fontSize: '0.875rem' }}>明細がありません。下の「項目を追加」で追加できます。</p>
         ) : (
-          items.map((i, idx) => {
+          editableItems.map((i, idx) => {
             const cost = Number(i.costPrice) || 0;
             const qty = Number(i.qty) || 1;
             const amt = Number(i.amount) || cost * qty;
             const unit = i.unit || '式';
-            const displayAmt = costMode ? amt : Math.floor(amt * (1 + profitRate / 100));
+            const displayAmt = costMode ? amt : (i.applyMargin ? Math.floor(amt * (1 + i.profitRate / 100)) : amt);
+            const isNew = !(i.name || '').trim();
             return (
               <div key={idx} className="quote-detail-item">
                 <div className="quote-detail-item-left">
-                  <div className="quote-detail-item-name">{i.name || ''}</div>
-                  <div className="quote-detail-item-meta">x{qty}{unit} @{cost.toLocaleString()}</div>
+                  {isNew ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <input
+                        type="text"
+                        placeholder="品名"
+                        value={i.name}
+                        onChange={(e) => updateItem(idx, { name: e.target.value })}
+                        style={{ padding: 8, fontSize: '0.875rem' }}
+                      />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="number"
+                          placeholder="数量"
+                          value={qty}
+                          onChange={(e) => updateItem(idx, { qty: parseFloat(e.target.value) || 1 })}
+                          style={{ width: 70, padding: 8, fontSize: '0.875rem' }}
+                        />
+                        <input
+                          type="number"
+                          placeholder="単価"
+                          value={cost || ''}
+                          onChange={(e) => updateItem(idx, { costPrice: parseFloat(e.target.value) || 0, amount: 0 })}
+                          style={{ width: 100, padding: 8, fontSize: '0.875rem' }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="quote-detail-item-name">{i.name || '（品名未入力）'}</div>
+                      <div className="quote-detail-item-meta">x{qty}{unit} @{cost.toLocaleString()}</div>
+                    </>
+                  )}
+                  <div className="quote-detail-item-rate" style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>利益率:</span>
+                    <button
+                      type="button"
+                      className={`quote-detail-profit-btn ${i.profitRate === 10 ? 'selected' : ''}`}
+                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                      onClick={() => updateItem(idx, { profitRate: 10 })}
+                    >+10%</button>
+                    <button
+                      type="button"
+                      className={`quote-detail-profit-btn ${i.profitRate === 20 ? 'selected' : ''}`}
+                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                      onClick={() => updateItem(idx, { profitRate: 20 })}
+                    >+20%</button>
+                  </div>
                 </div>
-                <div className="quote-detail-item-amount">¥{displayAmt.toLocaleString()}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div className="quote-detail-item-amount">¥{displayAmt.toLocaleString()}</div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ minHeight: 32, padding: '4px 8px', fontSize: '0.75rem' }}
+                    onClick={() => deleteItem(idx)}
+                    title="削除"
+                  >削除</button>
+                </div>
               </div>
             );
           })
         )}
+        <div style={{ padding: '12px 0' }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={addItem} style={{ width: '100%' }}>
+            ＋ 項目を追加
+          </button>
+        </div>
       </div>
       <div className="quote-detail-profit">
-        <div className="quote-detail-profit-label">利益率を選択してプレビュー</div>
-        <div className="quote-detail-profit-btns">
-          <button
-            type="button"
-            className={`quote-detail-profit-btn ${profitRate === 10 ? 'selected' : ''}`}
-            onClick={() => setProfitRate(10)}
-          >+10%</button>
-          <button
-            type="button"
-            className={`quote-detail-profit-btn ${profitRate === 20 ? 'selected' : ''}`}
-            onClick={() => setProfitRate(20)}
-          >+20%</button>
-        </div>
         <div style={{ marginTop: 16, textAlign: 'center' }}>
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => onCreateEstimate(quoteId, profitRate)}
-            disabled={items.length === 0}
+            onClick={() => onCreateEstimate(editableItems, header ?? null)}
+            disabled={editableItems.length === 0}
           >この内容で見積書を作成</button>
         </div>
       </div>
@@ -227,6 +311,19 @@ export default function Home() {
         if (qid) setSelectedQuoteIdForDetail(qid);
       });
     });
+  };
+
+  const openEstimatePreviewWithItems = async (items: EditableQuoteItem[], header: QuoteDetail['header'] | null | undefined) => {
+    const card = document.getElementById('cardEstimateFromQuote');
+    if (card) {
+      card.classList.remove('hidden');
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    setPreviewQuoteHeader(header ?? null);
+    setPreviewQuoteItems(items);
+    const settings = await apiGet<Record<string, string>>('/settings').catch(() => ({}));
+    setPreviewSettings(settings || {});
+    renderEstimatePreview(items, header ?? null, settings || {});
   };
 
   const openEstimatePreview = async (quoteId: string, initialProfitRate?: number) => {
@@ -317,7 +414,9 @@ export default function Home() {
     const calcItems = items.map((i) => {
       const cost = Number(i.costPrice) || 0;
       const qty = Number(i.qty) || 1;
-      const sellPrice = Math.floor(cost * (1 + rate / 100));
+      const itemRate = (i as EditableQuoteItem).profitRate != null ? (i as EditableQuoteItem).profitRate : rate;
+      const applyMargin = (i as EditableQuoteItem).applyMargin !== false;
+      const sellPrice = applyMargin ? Math.floor(cost * (1 + itemRate / 100)) : cost;
       const amount = sellPrice * qty;
       return { name: i.name || '', qty, unit: i.unit || '式', cost, sellPrice, amount };
     });
@@ -376,9 +475,14 @@ export default function Home() {
           quoteId={selectedQuoteIdForDetail}
           clientList={clientList}
           onBack={() => setSelectedQuoteIdForDetail(null)}
-          onCreateEstimate={(quoteId, profitRate) => {
+          onCreateEstimate={(items, header) => {
+            const valid = items.filter((i) => (i.name || '').trim());
+            if (valid.length === 0) {
+              showToast('品名が入力された項目が1件以上必要です');
+              return;
+            }
             setSelectedQuoteIdForDetail(null);
-            openEstimatePreview(quoteId, profitRate);
+            openEstimatePreviewWithItems(valid, header);
           }}
           showToast={showToast}
         />
