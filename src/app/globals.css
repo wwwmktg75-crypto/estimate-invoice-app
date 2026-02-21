@@ -189,6 +189,10 @@ textarea {
   gap: 8px;
 }
 
+.btn-delete-quote:hover {
+  color: #c00 !important;
+}
+
 .preview-box {
   background: var(--bg);
   border: 1px solid var(--border);

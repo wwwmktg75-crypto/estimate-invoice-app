@@ -1,5 +1,30 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+
+/** 業者見積1件の削除（明細はCASCADEで削除） */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: quoteId } = await params;
+    const supabase = createServerClient();
+
+    const { error } = await supabase
+      .from('contractor_quotes')
+      .delete()
+      .eq('id', quoteId);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    return NextResponse.json(
+      { success: false, error: (e as Error).message },
+      { status: 500 }
+    );
+  }
+}
 
 /** 業者見積1件のヘッダー＋明細取得 */
 export async function GET(

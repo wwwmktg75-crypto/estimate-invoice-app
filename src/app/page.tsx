@@ -288,14 +288,15 @@ export default function Home() {
           const dateStr = (q.importedAt != null && q.importedAt !== '') ? String(q.importedAt).replace(/T.*/, '') : '';
           const sub = (contractor ? '業者: ' + contractor + '　' : '') + total + (dateStr ? ' · ' + dateStr : '');
           return `<div class="quote-item" data-quote-id="${q.quoteId || ''}" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-              <div><strong>${label || '（件名なし）'}</strong><br><span style="font-size:0.75rem; color: var(--text-muted)">${sub}</span></div>
-              <div style="display:flex; gap:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+              <div style="flex:1; min-width:0;"><strong>${label || '（件名なし）'}</strong><br><span style="font-size:0.75rem; color: var(--text-muted)">${sub}</span></div>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                 <button type="button" class="btn btn-secondary btn-sm btn-show-detail" data-quote-id="${q.quoteId || ''}">明細を見る</button>
                 <button type="button" class="btn btn-primary btn-sm btn-create-estimate" data-quote-id="${q.quoteId || ''}">見積書を作成</button>
+                <a href="#" role="button" class="btn-delete-quote" data-quote-id="${q.quoteId || ''}" title="削除" style="font-size:0.7rem; color: var(--text-muted); text-decoration:underline;">削除</a>
               </div></div></div>`;
         }).join('');
-        bindQuoteButtons(listEl);
+        bindQuoteButtons(listEl, showToast, loadImportedQuoteList);
       }
       done?.();
     } catch (e) {
@@ -304,11 +305,30 @@ export default function Home() {
     }
   }, []);
 
-  const bindQuoteButtons = (container: HTMLElement) => {
+  const bindQuoteButtons = (container: HTMLElement, toast: (msg: string) => void, reload: () => void) => {
     container.querySelectorAll('.btn-show-detail, .btn-create-estimate').forEach((btn) => {
       btn.addEventListener('click', function (this: HTMLElement) {
         const qid = this.getAttribute('data-quote-id');
         if (qid) setSelectedQuoteIdForDetail(qid);
+      });
+    });
+    container.querySelectorAll('.btn-delete-quote').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const qid = (e.currentTarget as HTMLElement).getAttribute('data-quote-id');
+        if (!qid || !confirm('この取り込みファイルを削除しますか？')) return;
+        try {
+          const res = await fetch(`/api/contractor-quotes/${qid}`, { method: 'DELETE' });
+          const data = await res.json().catch(() => ({}));
+          if (data.success) {
+            toast('削除しました');
+            reload();
+          } else {
+            toast(data.error || '削除に失敗しました');
+          }
+        } catch (e) {
+          toast('削除に失敗しました: ' + String((e as Error).message));
+        }
       });
     });
   };
@@ -737,6 +757,48 @@ function EstimateFromQuoteCard({
   onError: (e: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const handlePreviewPdf = async () => {
+    const clientName = (document.getElementById('previewClientName') as HTMLInputElement)?.value?.trim() || '';
+    if (!clientName) {
+      onError('クライアント名を入力してください');
+      return;
+    }
+    if (previewQuoteItems.length === 0) {
+      onError('明細がありません');
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const items = previewQuoteItems.map((i) => ({
+        name: i.name,
+        qty: i.qty,
+        unit: i.unit || '式',
+        costPrice: i.costPrice,
+        profitRate: (i as EditableQuoteItem).profitRate ?? 15,
+        applyMargin: (i as EditableQuoteItem).applyMargin !== false,
+      }));
+      const res = await fetch('/api/estimates/preview-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectName: clientName, clientName, items }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        onError(err?.error || 'プレビューの生成に失敗しました');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const handleIssue = async () => {
     const clientName = (document.getElementById('previewClientName') as HTMLInputElement)?.value?.trim() || '';
@@ -814,25 +876,34 @@ function EstimateFromQuoteCard({
         <div style={{ marginTop: 8 }}><strong>合計</strong> <span id="previewTotal">¥0</span></div>
       </div>
       <div style={{ marginTop: 16 }}><strong>見積書プレビュー</strong></div>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>下のHTMLプレビュー、または「PDFプレビュー」で仕上がりを確認できます。</p>
       <div id="estimatePreviewDoc" className="preview-box" style={{ marginTop: 8, maxHeight: 320, overflow: 'auto', background: '#fff', padding: 16, border: '1px solid var(--border)' }} />
-      <button
-        type="button"
-        className="btn btn-primary"
-        style={{ marginTop: 16 }}
-        id="btnIssueEstimate"
-        onClick={handleIssue}
-        disabled={loading}
-      >
-        {loading ? '発行中…' : '発行（保存してPDFを作成）'}
-      </button>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        style={{ marginLeft: 8 }}
-        onClick={() => document.getElementById('cardEstimateFromQuote')?.classList.add('hidden')}
-      >
-        戻る
-      </button>
+      <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handlePreviewPdf}
+          disabled={loading || previewLoading || previewQuoteItems.length === 0}
+        >
+          {previewLoading ? '生成中…' : 'PDFプレビュー'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          id="btnIssueEstimate"
+          onClick={handleIssue}
+          disabled={loading}
+        >
+          {loading ? '発行中…' : '発行（保存してPDFを作成）'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => document.getElementById('cardEstimateFromQuote')?.classList.add('hidden')}
+        >
+          戻る
+        </button>
+      </div>
     </div>
   );
 }

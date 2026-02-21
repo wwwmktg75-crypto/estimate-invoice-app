@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import React from 'react';
-import ReactPDF, {
+import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
+  renderToStream,
 } from '@react-pdf/renderer';
+
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (data: Buffer) => chunks.push(data));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
 
 // 日本語フォント（Noto Sans JP を埋め込み、なければデフォルト）
 const styles = StyleSheet.create({
@@ -212,7 +222,8 @@ export async function POST(
         totalAmount={totalAmount}
       />
     );
-    const rawBuffer = await ReactPDF.renderToBuffer(doc);
+    const pdfStream = await renderToStream(doc);
+    const rawBuffer = await streamToBuffer(pdfStream);
     const buffer = Buffer.isBuffer(rawBuffer) ? rawBuffer : Buffer.from(rawBuffer);
 
     // Supabase Storage に保存

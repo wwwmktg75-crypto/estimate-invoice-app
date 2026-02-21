@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import React from 'react';
-import ReactPDF, {
+import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
+  renderToStream,
 } from '@react-pdf/renderer';
+
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (data: Buffer) => chunks.push(data));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 11 },
@@ -113,7 +123,7 @@ export async function POST(
       inv.issue_date ||
       new Date().toISOString().slice(0, 10).replace(/-/g, '/');
 
-    const buffer = await ReactPDF.renderToBuffer(
+    const pdfStream = await renderToStream(
       <InvoicePdfDoc
         companyName={companyName}
         clientName={inv.client_name}
@@ -122,8 +132,7 @@ export async function POST(
         total={total}
       />
     );
-
-    const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+    const buf = await streamToBuffer(pdfStream);
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const fileName = `invoices/請求書_${inv.client_name}_${dateStr}.pdf`;
 
