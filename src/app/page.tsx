@@ -86,7 +86,7 @@ export default function Home() {
       if (err) {
         listEl.innerHTML = `<p style="font-size:0.875rem; color: var(--text-muted);">${err}</p>`;
       } else if (!list.length) {
-        listEl.innerHTML = '<p style="font-size:0.875rem; color: var(--text-muted);">まだ取り込んだ業者見積がありません。上でExcelファイルをアップロードして追加してください。</p>';
+        listEl.innerHTML = '<p style="font-size:0.875rem; color: var(--text-muted);">まだ取り込んだ業者見積がありません。上で「Excelファイルを選択して取り込む」を押してExcelをアップロードすると、ここに一覧と各見積の「見積書を作成」ボタンが表示されます。</p>';
       } else {
         listEl.innerHTML = list.map((q) => {
           const label = (q.subject || q.fileName || q.quoteId || '').toString();
@@ -105,8 +105,8 @@ export default function Home() {
         bindQuoteButtons(listEl);
       }
       done?.();
-    } catch {
-      listEl.innerHTML = '<p style="font-size:0.875rem; color: var(--text-muted);">取得できませんでした。</p>';
+    } catch (e) {
+      listEl.innerHTML = '<p style="font-size:0.875rem; color: #c00;">取得できませんでした: ' + String((e as Error).message) + '</p>';
       done?.();
     }
   }, []);
@@ -121,19 +121,29 @@ export default function Home() {
         detailEl.innerHTML = '<span style="color: var(--text-muted)">読み込み中…</span>';
         try {
           const res = await apiGet<QuoteDetail>(`/contractor-quotes/${qid}`);
-          if (!res.success || !res.items?.length) {
-            detailEl.innerHTML = '<p style="font-size:0.875rem; color: var(--text-muted)">明細がありません</p>';
+          const items = res?.items ?? [];
+          const header = res?.header;
+          let headerHtml = '';
+          if (header) {
+            const parts = [];
+            if (header.subject) parts.push('件名: ' + header.subject);
+            if (header.fileName) parts.push('ファイル: ' + header.fileName);
+            if (header.totalCost != null && header.totalCost > 0) parts.push('合計原価: ¥' + Number(header.totalCost).toLocaleString());
+            if (parts.length) headerHtml = '<p style="font-size:0.875rem; margin-bottom:8px">' + parts.join('　｜　') + '</p>';
+          }
+          if (items.length === 0) {
+            detailEl.innerHTML = headerHtml + '<p style="font-size:0.875rem; color: var(--text-muted)">明細がありません（Excelの形式を確認してください）</p>';
             return;
           }
-          const tableRows = res.items.map((i) => {
+          const tableRows = items.map((i) => {
             const cost = Number(i.costPrice) || 0;
             const qty = Number(i.qty) || 1;
             const amt = Number(i.amount) || cost * qty;
             return `<tr><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${i.name || ''}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${qty}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${i.unit || '式'}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border); text-align:right">¥${cost.toLocaleString()}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border); text-align:right">¥${amt.toLocaleString()}</td></tr>`;
           }).join('');
-          detailEl.innerHTML = '<strong>業者見積明細</strong><table style="width:100%; border-collapse:collapse; font-size:0.8rem; margin-top:8px"><tr style="background:var(--border)"><th style="padding:4px 6px; text-align:left">品名</th><th style="padding:4px 6px">数量</th><th style="padding:4px 6px">単位</th><th style="padding:4px 6px; text-align:right">原価単価</th><th style="padding:4px 6px; text-align:right">金額</th></tr>' + tableRows + '</table>';
-        } catch {
-          detailEl.innerHTML = '取得失敗';
+          detailEl.innerHTML = headerHtml + '<strong>業者見積明細</strong><table style="width:100%; border-collapse:collapse; font-size:0.8rem; margin-top:8px"><tr style="background:var(--border)"><th style="padding:4px 6px; text-align:left">品名</th><th style="padding:4px 6px">数量</th><th style="padding:4px 6px">単位</th><th style="padding:4px 6px; text-align:right">原価単価</th><th style="padding:4px 6px; text-align:right">金額</th></tr>' + tableRows + '</table>';
+        } catch (e) {
+          detailEl.innerHTML = '<p style="color:#c00">取得失敗: ' + String((e as Error).message) + '</p>';
         }
       });
     });
@@ -173,10 +183,14 @@ export default function Home() {
       const settings = await apiGet<Record<string, string>>('/settings').catch(() => ({}));
       setPreviewSettings(settings || {});
       renderEstimatePreview((res?.items ?? []) as QuoteItem[], res?.header ?? null, settings || {});
-    } catch {
+    } catch (e) {
       setPreviewQuoteHeader(null);
       setPreviewQuoteItems([]);
       setPreviewSettings({});
+      const errEl = document.getElementById('previewContractorQuoteHeader');
+      if (errEl) errEl.innerHTML = '<span style="color:#c00">読み込み失敗: ' + String((e as Error).message) + '</span>';
+      const itemsEl = document.getElementById('previewContractorQuoteItems');
+      if (itemsEl) itemsEl.innerHTML = '<p style="color:#c00">API接続を確認してください。環境変数（Supabase）が正しく設定されているか確認してください。</p>';
       renderEstimatePreview([], null, {});
     }
   };
@@ -308,11 +322,11 @@ export default function Home() {
             <div className="card">
               <h2>1. 業者見積の取り込み</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                Excelファイルをアップロードして取り込みます。
+                Excelファイルをアップロードして取り込みます。1行目に「品名」「数量」「単価」「金額」などの列名がある形式に対応しています。
               </p>
               <FileUpload
-                onSuccess={() => {
-                  showToast('取り込みました');
+                onSuccess={(itemCount) => {
+                  showToast((itemCount ?? 0) > 0 ? '取り込みました（' + (itemCount ?? 0) + '項目）' : '取り込みました（明細0件の場合はExcel形式を確認）');
                   loadImportedQuoteList();
                 }}
                 onError={(e) => showToast('取込失敗: ' + e)}
@@ -321,7 +335,7 @@ export default function Home() {
             <div className="card" id="cardImportedQuotes">
               <h2>2. 取り込んだ業者見積を表示 → 利益をのせて自社見積を作成</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                業者見積の「見積書を作成」を押すと、取り込んだ内容を表示します。確認してから利益率を設定し、クライアント向け見積書を作成できます。
+                ① 上でExcelをアップロードして取り込む → ② 下の一覧に表示された各見積の「見積書を作成」を押す → ③ 内容を確認し、利益率を設定して発行
               </p>
               <button
                 type="button"
@@ -398,7 +412,7 @@ function FileUpload({
   onSuccess,
   onError,
 }: {
-  onSuccess: () => void;
+  onSuccess: (itemCount?: number) => void;
   onError: (e: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -411,8 +425,8 @@ function FileUpload({
     try {
       const fd = new FormData();
       fd.append('file', file);
-      await apiPostFormData<{ success: boolean; itemCount?: number }>('/contractor-quotes/import', fd);
-      onSuccess();
+      const r = await apiPostFormData<{ success: boolean; itemCount?: number }>('/contractor-quotes/import', fd);
+      onSuccess(r?.itemCount ?? 0);
     } catch (err) {
       onError((err as Error).message);
     } finally {

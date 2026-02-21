@@ -4,10 +4,10 @@
 import * as XLSX from 'xlsx';
 
 const KW = {
-  name: ['品名', '項目', '名称', '明細'],
-  qty: ['数量'],
-  price: ['単価', '原価', '仕入'],
-  amount: ['金額', '小計'],
+  name: ['品名', '項目', '名称', '明細', '内容', '摘要', '内訳', '品目'],
+  qty: ['数量', '個数'],
+  price: ['単価', '原価', '仕入', '価格'],
+  amount: ['金額', '小計', '合計'],
 };
 
 function parseNum(val: unknown): number {
@@ -65,7 +65,14 @@ export function extractQuoteDetailsFromBuffer(buffer: Buffer): QuoteItem[] {
     }
   }
 
-  if (headerRow < 0) return [];
+  // ヘッダーが見つからない場合、1行目をヘッダーとみなし、左から品名・数量・単価・金額の順で試す
+  if (headerRow < 0) {
+    headerRow = 0;
+    col.name = 0;
+    col.qty = 1;
+    col.price = 2;
+    col.amount = 3;
+  }
 
   const out: QuoteItem[] = [];
   for (let j = headerRow + 1; j < data.length; j++) {
