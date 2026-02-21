@@ -350,3 +350,128 @@ textarea {
   background: #fff;
   color: var(--primary);
 }
+
+/* 請求書詳細ビュー（ドキュメントプレビュー風） */
+.invoice-detail-view {
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.invoice-detail-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.invoice-detail-nav .nav-back {
+  font-size: 0.9375rem;
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.invoice-detail-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding: 12px 16px;
+  background: #e8f4f8;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.invoice-detail-preview-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+}
+
+.invoice-doc-preview {
+  max-width: 800px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 32px 40px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
+}
+
+.invoice-doc-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-align: center;
+  margin: 0 0 24px 0;
+}
+
+.invoice-doc-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.invoice-doc-client {
+  flex: 1;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.invoice-doc-client-name {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.invoice-doc-vendor {
+  flex: 1;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  text-align: right;
+}
+
+.invoice-doc-vendor-name {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.invoice-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.invoice-doc-table th,
+.invoice-doc-table td {
+  border: 1px solid #ddd;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.invoice-doc-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.invoice-doc-table .text-right {
+  text-align: right;
+}
+
+.invoice-doc-total {
+  margin-top: 16px;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: right;
+}
+
+.invoice-detail-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}

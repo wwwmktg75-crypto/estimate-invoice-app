@@ -1251,9 +1251,11 @@ function InvoiceDetail({
     items: Array<{ description: string; amount: number }>;
     emailTo: string;
   } | null>(null);
+  const [settings, setSettings] = useState<Record<string, string>>({});
 
   useEffect(() => {
     apiGet<typeof inv>(`/invoices/${invoiceId}`).then(setInv).catch(() => setInv(null));
+    apiGet<Record<string, string>>('/settings').then((s) => setSettings(s || {})).catch(() => setSettings({}));
   }, [invoiceId]);
 
   const createPdf = async () => {
@@ -1273,36 +1275,77 @@ function InvoiceDetail({
   };
 
   if (!inv) return null;
+
+  const companyName = settings.companyName || '（会社名）';
+  const companyAddress = settings.companyAddress || '';
+  const companyTel = settings.companyTel || '';
+  const companyEmail = settings.companyEmail || '';
+  const issueDateStr = (inv.issueDate || '').replace(/-/g, '/') || new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+  const totalAmount = inv.amount ?? (inv.items || []).reduce((s, i) => s + (i.amount || 0), 0);
+
   return (
-    <div className="card">
-      <h2>請求書</h2>
-      <p style={{ fontSize: '0.875rem' }}>{inv.clientName} · ¥{(inv.amount || 0).toLocaleString()}</p>
-      <div className="preview-box">
-        <strong>請求書</strong>
-        <br />
-        請求先: {inv.clientName}
-        <br />
-        発行日: {inv.issueDate}
-        <br />
-        {(inv.items || []).map((i, idx) => (
-          <span key={idx}>
-            {(i.description || '') + ' … ¥' + (i.amount || 0).toLocaleString()}
-            <br />
-          </span>
-        ))}
-        <strong>合計: ¥{(inv.amount || 0).toLocaleString()}</strong>
+    <div className="invoice-detail-view">
+      <div className="invoice-detail-nav">
+        <button type="button" className="nav-back" onClick={onClose}>
+          ← 請求書一覧に戻る
+        </button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={createPdf}>
+          PDF出力
+        </button>
       </div>
-      <button type="button" className="btn btn-primary btn-sm" onClick={createPdf}>
-        PDFを作成・ダウンロード
-      </button>
-      <label style={{ marginTop: 16 }}>送付先メール</label>
-      <input type="email" placeholder="example@example.com" defaultValue={inv.emailTo} />
-      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
-        メール送付機能は別途 Resend 等の設定が必要です。
-      </p>
-      <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={onClose}>
-        閉じる
-      </button>
+      <div className="invoice-detail-summary">
+        <span>請求先: {inv.clientName}</span>
+        <span>請求日: {issueDateStr}</span>
+        <span>合計金額: ¥{totalAmount.toLocaleString()}</span>
+      </div>
+      <div className="invoice-detail-preview-wrapper">
+        <div className="invoice-doc-preview">
+          <h1 className="invoice-doc-title">請求書</h1>
+          <div className="invoice-doc-body">
+            <div className="invoice-doc-client">
+              <p className="invoice-doc-client-name">{inv.clientName} 御中</p>
+              <p>請求日: {issueDateStr}</p>
+              <p>合計金額: ¥{totalAmount.toLocaleString()} (税込)</p>
+            </div>
+            <div className="invoice-doc-vendor">
+              <p className="invoice-doc-vendor-name">{companyName}</p>
+              {companyAddress && <p>{companyAddress}</p>}
+              {companyTel && <p>TEL: {companyTel}</p>}
+              {companyEmail && <p>E-mail: {companyEmail}</p>}
+            </div>
+          </div>
+          <table className="invoice-doc-table">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>業務内容</th>
+                <th>単価</th>
+                <th>数量</th>
+                <th>金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(inv.items || []).map((i, idx) => (
+                <tr key={idx}>
+                  <td />
+                  <td>{i.description || ''}</td>
+                  <td className="text-right">¥{(i.amount || 0).toLocaleString()}</td>
+                  <td className="text-right">1</td>
+                  <td className="text-right">¥{(i.amount || 0).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="invoice-doc-total">
+            合計: ¥{totalAmount.toLocaleString()}
+          </div>
+        </div>
+      </div>
+      <div className="invoice-detail-footer">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+          閉じる
+        </button>
+      </div>
     </div>
   );
 }
