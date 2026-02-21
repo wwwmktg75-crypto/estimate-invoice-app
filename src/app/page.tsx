@@ -125,9 +125,13 @@ export default function Home() {
             detailEl.innerHTML = '<p style="font-size:0.875rem; color: var(--text-muted)">明細がありません</p>';
             return;
           }
-          detailEl.innerHTML = '<strong>明細</strong><br>' + res.items.map((i) =>
-            (i.name || '') + ' × ' + (i.qty || 1) + ' … ¥' + (i.amount != null ? i.amount : (i.costPrice || 0) * (i.qty || 1)).toLocaleString()
-          ).join('<br>');
+          const tableRows = res.items.map((i) => {
+            const cost = Number(i.costPrice) || 0;
+            const qty = Number(i.qty) || 1;
+            const amt = Number(i.amount) || cost * qty;
+            return `<tr><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${i.name || ''}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${qty}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border)">${i.unit || '式'}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border); text-align:right">¥${cost.toLocaleString()}</td><td style="padding:4px 6px; border-bottom:1px solid var(--border); text-align:right">¥${amt.toLocaleString()}</td></tr>`;
+          }).join('');
+          detailEl.innerHTML = '<strong>業者見積明細</strong><table style="width:100%; border-collapse:collapse; font-size:0.8rem; margin-top:8px"><tr style="background:var(--border)"><th style="padding:4px 6px; text-align:left">品名</th><th style="padding:4px 6px">数量</th><th style="padding:4px 6px">単位</th><th style="padding:4px 6px; text-align:right">原価単価</th><th style="padding:4px 6px; text-align:right">金額</th></tr>' + tableRows + '</table>';
         } catch {
           detailEl.innerHTML = '取得失敗';
         }
@@ -143,7 +147,10 @@ export default function Home() {
 
   const openEstimatePreview = async (quoteId: string) => {
     const card = document.getElementById('cardEstimateFromQuote');
-    if (card) card.classList.remove('hidden');
+    if (card) {
+      card.classList.remove('hidden');
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     const els = {
       previewClientName: document.getElementById('previewClientName') as HTMLInputElement,
       previewProfitRate: document.getElementById('previewProfitRate') as HTMLInputElement,
@@ -312,9 +319,9 @@ export default function Home() {
               />
             </div>
             <div className="card" id="cardImportedQuotes">
-              <h2>2. 取り込んだ見積をベースにクライアント見積書を作成</h2>
+              <h2>2. 取り込んだ業者見積を表示 → 利益をのせて自社見積を作成</h2>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                取り込んだ業者見積の「見積書を作成」を押すと、内容を表示して利益をのせたプレビューが表示されます。
+                業者見積の「見積書を作成」を押すと、取り込んだ内容を表示します。確認してから利益率を設定し、クライアント向け見積書を作成できます。
               </p>
               <button
                 type="button"
@@ -569,15 +576,16 @@ function EstimateFromQuoteCard({
     <div className="card hidden" id="cardEstimateFromQuote">
       <h2>自社見積書の作成（プレビュー・発行）</h2>
       <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-        取り込んだ業者見積を表示し、利益をのせてクライアント向け見積書を作成します。
+        ① 取り込んだ業者見積を確認 → ② 利益率を設定 → ③ 自社見積を発行
       </p>
       <div id="previewContractorQuoteSection" style={{ marginTop: 12, padding: 12, background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>業者見積（ベース元）</div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, marginBottom: 6 }}>① 取り込んだ業者見積</div>
         <div id="previewContractorQuoteHeader" style={{ fontSize: '0.875rem' }} />
         <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>業者見積明細</div>
         <div id="previewContractorQuoteItems" style={{ marginTop: 4, overflowX: 'auto', fontSize: '0.8rem' }} />
       </div>
       <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, marginBottom: 8 }}>② クライアント・利益率を設定</div>
         <label style={{ fontSize: '0.875rem' }}>クライアント名（件名）</label>
         <input
           type="text"
@@ -597,9 +605,11 @@ function EstimateFromQuoteCard({
           style={{ width: 80, marginTop: 4 }}
         />
       </div>
-      <div style={{ marginTop: 12 }}><strong>自社見積（利益をのせた金額）</strong></div>
-      <div id="previewItemsTable" style={{ marginTop: 8, overflowX: 'auto', fontSize: '0.875rem' }} />
-      <div style={{ marginTop: 8 }}><strong>合計</strong> <span id="previewTotal">¥0</span></div>
+      <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, marginBottom: 8 }}>③ 自社見積（利益をのせた金額）</div>
+        <div id="previewItemsTable" style={{ marginTop: 8, overflowX: 'auto', fontSize: '0.875rem' }} />
+        <div style={{ marginTop: 8 }}><strong>合計</strong> <span id="previewTotal">¥0</span></div>
+      </div>
       <div style={{ marginTop: 16 }}><strong>見積書プレビュー</strong></div>
       <div id="estimatePreviewDoc" className="preview-box" style={{ marginTop: 8, maxHeight: 320, overflow: 'auto', background: '#fff', padding: 16, border: '1px solid var(--border)' }} />
       <button
