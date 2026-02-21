@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 const API = '/api';
 
 async function apiGet<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(API + path, { cache: 'no-store', ...options });
+  const res = await fetch(API + path, options);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -74,12 +74,14 @@ function ContractorQuoteDetailView({
   clientList,
   onBack,
   onCreateEstimate,
+  onDeleteQuote,
   showToast,
 }: {
   quoteId: string;
   clientList: string[];
   onBack: () => void;
   onCreateEstimate: (items: EditableQuoteItem[], header: QuoteDetail['header'] | null | undefined) => void;
+  onDeleteQuote: () => void;
   showToast: (msg: string) => void;
 }) {
   const [detail, setDetail] = useState<QuoteDetail | null>(null);
@@ -139,6 +141,29 @@ function ContractorQuoteDetailView({
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => onCreateEstimate(editableItems, header ?? null)}>編集</button>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCostMode((c) => !c)}>
             {costMode ? '売上モード' : '原価モード'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}
+            onClick={async () => {
+              if (!confirm('この取り込みを一覧から削除しますか？')) return;
+              try {
+                const res = await fetch(`/api/contractor-quotes/${encodeURIComponent(quoteId)}`, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
+                  showToast('削除しました');
+                  onBack();
+                  onDeleteQuote();
+                } else {
+                  showToast(data.error || '削除に失敗しました');
+                }
+              } catch (e) {
+                showToast('削除に失敗しました: ' + String((e as Error).message));
+              }
+            }}
+          >
+            取り込みを削除
           </button>
         </div>
       </div>
@@ -273,7 +298,7 @@ export default function Home() {
     const listEl = document.getElementById('importedQuoteList');
     if (!listEl) return;
     try {
-      const result = await apiGet<{ list: ContractorQuote[]; error: string | null }>('/contractor-quotes');
+      const result = await apiGet<{ list: ContractorQuote[]; error: string | null }>(`/contractor-quotes?_t=${Date.now()}`);
       const list = result?.list ?? [];
       const err = result?.error ?? null;
       if (err) {
@@ -289,12 +314,17 @@ export default function Home() {
           const sub = (contractor ? '業者: ' + contractor + '　' : '') + total + (dateStr ? ' · ' + dateStr : '');
           return `<div class="quote-item" data-quote-id="${q.quoteId || ''}" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:8px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
-              <div style="flex:1; min-width:0;"><strong>${label || '（件名なし）'}</strong><br><span style="font-size:0.75rem; color: var(--text-muted)">${sub}</span></div>
+              <div style="flex:1; min-width:0;">
+                <strong>${label || '（件名なし）'}</strong><br>
+                <span style="font-size:0.75rem; color: var(--text-muted)">${sub}</span><br>
+                <a href="#" role="button" class="btn-delete-quote" data-quote-id="${q.quoteId || ''}" title="この取り込みを一覧から削除" style="font-size:0.7rem; color: var(--text-muted); text-decoration:underline; margin-top:4px; display:inline-block;">取り込みを削除</a>
+              </div>
               <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                 <button type="button" class="btn btn-secondary btn-sm btn-show-detail" data-quote-id="${q.quoteId || ''}">明細を見る</button>
                 <button type="button" class="btn btn-primary btn-sm btn-create-estimate" data-quote-id="${q.quoteId || ''}">見積書を作成</button>
-                <a href="#" role="button" class="btn-delete-quote" data-quote-id="${q.quoteId || ''}" title="削除" style="font-size:0.7rem; color: var(--text-muted); text-decoration:underline;">削除</a>
-              </div></div></div>`;
+              </div>
+            </div>
+          </div>`;
         }).join('');
         bindQuoteButtons(listEl, showToast, loadImportedQuoteList);
       }
@@ -504,6 +534,7 @@ export default function Home() {
             setSelectedQuoteIdForDetail(null);
             openEstimatePreviewWithItems(valid, header);
           }}
+          onDeleteQuote={loadImportedQuoteList}
           showToast={showToast}
         />
       )}
