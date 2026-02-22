@@ -61,6 +61,63 @@ interface QuoteDetail {
 
 const DEFAULT_PROFIT_RATE = 10;
 
+/** 見積書HTMLを生成（キャプチャ用） */
+function buildEstimateDocHtml(options: {
+  calcItems: Array<{ name: string; qty: number; unit: string; cost: number; sellPrice: number; amount: number }>;
+  clientName: string;
+  settings: Record<string, string>;
+}): string {
+  const { calcItems, clientName, settings } = options;
+  const companyName = settings.companyName || '株式会社　AFECT';
+  const representative = settings.companyRepresentative || '代表取締役　小松　裕介';
+  const companyTel = settings.companyTel || '092-519-7189';
+  const companyFax = settings.companyFax || '092-519-6307';
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+  const [y, m, d] = dateStr.split('/');
+  const reiwa = parseInt(y || '0', 10) - 2018;
+  const reiwaDate = `令和${reiwa}年${parseInt(m || '1', 10)}月${parseInt(d || '1', 10)}日`;
+  const subtotal = calcItems.reduce((s, i) => s + i.amount, 0);
+  const tax = Math.floor(subtotal * 0.1);
+  const totalWithTax = subtotal + tax;
+
+  return '<div style="font-family:sans-serif; font-size:12px; padding:16px; background:#fff;">' +
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">' +
+    '<h2 style="margin:0; flex:1; text-align:center; font-size:18px;">御見積書</h2>' +
+    '<div style="font-size:10px; text-align:right; width:100px;">見積No. PRV<br>' + reiwaDate + '<br>日付見積御照会の件</div></div>' +
+    '<div style="display:flex; margin-bottom:12px;">' +
+    '<div style="flex:1;"><strong>' + (clientName || '（宛先）') + ' 御中</strong></div>' +
+    '<div style="flex:1;">' + (clientName || '（件名）') + ' に対し、次の通り御見積致しますので何卒御用命下さいますよう御願い申し上げます。</div></div>' +
+    '<table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:12px;">' +
+    '<tr style="border-bottom:1px solid #999;"><td style="width:20%; padding:4px;">納　期</td><td style="padding:4px;">ご指定日</td></tr>' +
+    '<tr style="border-bottom:1px solid #999;"><td style="padding:4px;">受渡場所</td><td style="padding:4px;">ご指定場所</td></tr>' +
+    '<tr style="border-bottom:1px solid #999;"><td style="padding:4px;">御支払条件</td><td style="padding:4px;">別途お打合せ</td></tr>' +
+    '<tr style="border-bottom:1px solid #999;"><td style="padding:4px;">見積有効期限</td><td style="padding:4px;">別途お打合せ</td></tr></table>' +
+    '<p style="margin:0 0 12px 0;"><strong>合計金額</strong> <span style="font-size:16px; font-weight:bold;">¥' + subtotal.toLocaleString() + '</span></p>' +
+    '<div style="text-align:right; font-size:10px; margin-bottom:12px;">' + companyName + '<br>' + representative + '<br>TEL: ' + companyTel + '  FAX: ' + companyFax + '</div>' +
+    '<table style="width:100%; border-collapse:collapse; font-size:11px">' +
+    '<tr style="background:#eee"><th style="border:1px solid #999; padding:6px; width:8%">項</th><th style="border:1px solid #999; padding:6px;">品　名</th><th style="border:1px solid #999; padding:6px; width:15%">数　量</th><th style="border:1px solid #999; padding:6px; width:15%; text-align:right">単　価</th><th style="border:1px solid #999; padding:6px; width:15%; text-align:right">合　計</th></tr>' +
+    calcItems.map((i) =>
+      '<tr><td style="border:1px solid #999; padding:6px"></td><td style="border:1px solid #999; padding:6px">' + i.name + '</td><td style="border:1px solid #999; padding:6px">' + i.qty + (i.unit || '') + '</td><td style="border:1px solid #999; padding:6px; text-align:right">¥' + i.sellPrice.toLocaleString() + '</td><td style="border:1px solid #999; padding:6px; text-align:right">¥' + i.amount.toLocaleString() + '</td></tr>'
+    ).join('') + '</table>' +
+    '<div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px solid #999;">' +
+    '<div style="display:flex; justify-content:flex-end; gap:24px;"><span>合　計</span><span style="width:80px; text-align:right">¥' + subtotal.toLocaleString() + '</span></div>' +
+    '<div style="display:flex; justify-content:flex-end; gap:24px;"><span>消費税</span><span style="width:80px; text-align:right">¥' + tax.toLocaleString() + '</span></div>' +
+    '<div style="display:flex; justify-content:flex-end; gap:24px;"><span>御請求合計</span><span style="width:80px; text-align:right">¥' + totalWithTax.toLocaleString() + '</span></div></div></div>';
+}
+
+/** HTML要素をキャプチャしてPDF Blobを生成（クライアント専用） */
+async function captureElementToPdfBlob(element: HTMLElement): Promise<Blob> {
+  const html2pdf = (await import('html2pdf.js')).default;
+  const opt = {
+    margin: 10,
+    filename: 'estimate_preview.pdf',
+    image: { type: 'jpeg' as const, quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+  };
+  return html2pdf().set(opt).from(element).outputPdf('blob');
+}
+
 function toEditableItem(i: QuoteItem): EditableQuoteItem {
   return {
     ...i,
@@ -624,6 +681,7 @@ export default function Home() {
             <EstimateFromQuoteCard
               clientList={clientList}
               previewQuoteItems={previewQuoteItems}
+              onRenderPreview={() => renderEstimatePreview(previewQuoteItems, previewQuoteHeader, previewSettings)}
               onIssueSuccess={() => {
                 showToast('発行しました');
                 loadImportedQuoteList();
@@ -800,11 +858,13 @@ function NewEstimateForm({
 function EstimateFromQuoteCard({
   clientList,
   previewQuoteItems,
+  onRenderPreview,
   onIssueSuccess,
   onError,
 }: {
   clientList: string[];
   previewQuoteItems: QuoteItem[];
+  onRenderPreview: () => void;
   onIssueSuccess: () => void;
   onError: (e: string) => void;
 }) {
@@ -821,27 +881,14 @@ function EstimateFromQuoteCard({
       onError('明細がありません');
       return;
     }
+    const docEl = document.getElementById('estimatePreviewDoc');
+    if (!docEl || !docEl.firstElementChild) {
+      onError('プレビューを先に表示してください');
+      return;
+    }
     setPreviewLoading(true);
     try {
-      const items = previewQuoteItems.map((i) => ({
-        name: i.name,
-        qty: i.qty,
-        unit: i.unit || '式',
-        costPrice: i.costPrice,
-        profitRate: (i as EditableQuoteItem).profitRate ?? 15,
-        applyMargin: (i as EditableQuoteItem).applyMargin !== false,
-      }));
-      const res = await fetch('/api/estimates/preview-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectName: clientName, clientName, items }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        onError(err?.error || 'プレビューの生成に失敗しました');
-        return;
-      }
-      const blob = await res.blob();
+      const blob = await captureElementToPdfBlob(docEl);
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -862,9 +909,17 @@ function EstimateFromQuoteCard({
       onError('明細がありません');
       return;
     }
+    const docEl = document.getElementById('estimatePreviewDoc');
+    if (!docEl || !docEl.firstElementChild) {
+      onError('プレビューを先に表示してください');
+      return;
+    }
     const rate = parseFloat((document.getElementById('previewProfitRate') as HTMLInputElement)?.value || '15') || 15;
     setLoading(true);
     try {
+      onRenderPreview();
+      await new Promise((r) => setTimeout(r, 100));
+      const pdfBlob = await captureElementToPdfBlob(docEl);
       const res = await apiPost<{ estimateId: number }>('/estimates', {
         projectName: clientName,
         clientName,
@@ -872,15 +927,18 @@ function EstimateFromQuoteCard({
         defaultRate: rate,
         forceNew: true,
       });
-      const pdfRes = await apiPost<{ success: boolean; viewUrl?: string; error?: string }>(
-        `/estimates/${res.estimateId}/pdf`
+      const fd = new FormData();
+      fd.append('pdf', pdfBlob, 'estimate.pdf');
+      const pdfRes = await apiPostFormData<{ success: boolean; viewUrl?: string; error?: string }>(
+        `/estimates/${res.estimateId}/pdf`,
+        fd
       );
       if (pdfRes.success && pdfRes.viewUrl) {
         window.open(pdfRes.viewUrl, '_blank');
         document.getElementById('cardEstimateFromQuote')?.classList.add('hidden');
         onIssueSuccess();
       } else {
-        onError(pdfRes.error || 'PDFの作成に失敗しました');
+        onError((pdfRes as { error?: string }).error || 'PDFの作成に失敗しました');
       }
     } catch (e) {
       onError((e as Error).message);
@@ -1025,14 +1083,46 @@ function EstimateEditCard({
     }
     try {
       await save();
-      const res = await apiPost<{ success: boolean; viewUrl?: string; error?: string }>(
-        `/estimates/${currentEstimateId}/pdf`
+      const defaultRate = rate;
+      const calcItems = currentEstimateItems
+        .filter((i) => String(i.name || '').trim())
+        .map((i) => {
+          const cost = Number(i.costPrice) || 0;
+          const qty = Number(i.qty) || 1;
+          const itemRate = i.profitRate != null ? i.profitRate : defaultRate;
+          const applyMargin = i.applyMargin !== false;
+          const sellPrice = applyMargin ? Math.floor(cost * (1 + itemRate / 100)) : cost;
+          const amount = sellPrice * qty;
+          return { name: i.name || '', qty, unit: i.unit || '式', cost, sellPrice, amount };
+        });
+      if (calcItems.length === 0) {
+        onError('明細を1件以上入力してください');
+        return;
+      }
+      const settings = await apiGet<Record<string, string>>('/settings').catch(() => ({}));
+      const html = buildEstimateDocHtml({
+        calcItems,
+        clientName: label || '（宛先）',
+        settings: settings || {},
+      });
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;';
+      wrap.innerHTML = html;
+      document.body.appendChild(wrap);
+      const target = wrap.firstElementChild as HTMLElement;
+      const pdfBlob = await captureElementToPdfBlob(target);
+      document.body.removeChild(wrap);
+      const fd = new FormData();
+      fd.append('pdf', pdfBlob, 'estimate.pdf');
+      const res = await apiPostFormData<{ success: boolean; viewUrl?: string; error?: string }>(
+        `/estimates/${currentEstimateId}/pdf`,
+        fd
       );
-      if (res.success && res.viewUrl) {
-        window.open(res.viewUrl, '_blank');
+      if (res.success && (res as { viewUrl?: string }).viewUrl) {
+        window.open((res as { viewUrl: string }).viewUrl, '_blank');
         onPdfCreated();
       } else {
-        onError(res.error || '失敗');
+        onError((res as { error?: string }).error || '失敗');
       }
     } catch (e) {
       onError((e as Error).message);
