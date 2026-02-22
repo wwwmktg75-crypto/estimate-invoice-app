@@ -107,15 +107,32 @@ function buildEstimateDocHtml(options: {
 
 /** HTML要素をキャプチャしてPDF Blobを生成（クライアント専用） */
 async function captureElementToPdfBlob(element: HTMLElement): Promise<Blob> {
-  const html2pdf = (await import('html2pdf.js')).default;
-  const opt = {
-    margin: 10,
-    filename: 'estimate_preview.pdf',
-    image: { type: 'jpeg' as const, quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-  };
-  return html2pdf().set(opt).from(element).outputPdf('blob');
+  const target = element.firstElementChild as HTMLElement || element;
+  const html2canvas = (await import('html2canvas')).default;
+  const { jsPDF } = await import('jspdf');
+  const canvas = await html2canvas(target, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+  });
+  const imgData = canvas.toDataURL('image/png', 1.0);
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const imgWidth = pageWidth - 20;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  let heightLeft = imgHeight;
+  let position = 10;
+  pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+  heightLeft -= pageHeight - 20;
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight + 10;
+    pdf.addPage();
+    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight - 20;
+  }
+  return pdf.output('blob');
 }
 
 function toEditableItem(i: QuoteItem): EditableQuoteItem {
@@ -893,7 +910,8 @@ function EstimateFromQuoteCard({
       window.open(url, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) {
-      onError((e as Error).message);
+      const msg = (e as Error).message || String(e);
+      onError('プレビューの生成に失敗しました: ' + msg);
     } finally {
       setPreviewLoading(false);
     }
